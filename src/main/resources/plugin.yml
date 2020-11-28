@@ -1,0 +1,7 @@
+name: BedrockBreaker
+version: ${project.version}
+main: blockbreaker.bedrockbreaker.BedrockBreaker
+api-version: 1.13
+load: STARTUP
+authors: [Noa Zetterman]
+description: Allows players to break bedrock with configurable items
