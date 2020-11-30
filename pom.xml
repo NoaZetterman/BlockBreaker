@@ -59,10 +59,6 @@
             <id>papermc-repo</id>
             <url>https://papermc.io/repo/repository/maven-public/</url>
         </repository>
-        <repository>
-            <id>sonatype</id>
-            <url>https://oss.sonatype.org/content/groups/public/</url>
-        </repository>
     </repositories>
 
     <dependencies>
@@ -71,6 +67,11 @@
             <artifactId>paper-api</artifactId>
             <version>1.16.2-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.bukkit</groupId>
+            <artifactId>craftbukkit</artifactId>
+            <version>1.16.2-R0.1-SNAPSHOT</version>
         </dependency>
     </dependencies>
 </project>
