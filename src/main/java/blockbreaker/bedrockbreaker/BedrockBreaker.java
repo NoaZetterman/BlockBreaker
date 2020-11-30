@@ -2,11 +2,16 @@ package blockbreaker.bedrockbreaker;
 
 import org.bukkit.plugin.java.JavaPlugin;
 
+
 public final class BedrockBreaker extends JavaPlugin {
+
+
+
 
     @Override
     public void onEnable() {
-        // Nothing here I believe?
+
+        getServer().getPluginManager().registerEvents(new BlockEvents(this), this);
 
     }
 
