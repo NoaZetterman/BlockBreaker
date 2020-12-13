@@ -70,7 +70,6 @@ public class DigBlock implements Listener {
                         }
                     } else if(!playersWithDigDelay.contains(player.getUniqueId())) {
                         if (!blockReader.playerIsDiggingBlock()) {
-                            System.out.println("Player is not digging block " + this.getTaskId());
                             cancel();
                         } else {
 
@@ -84,7 +83,6 @@ public class DigBlock implements Listener {
                             //There are a total of 10 different dig states (0-9)
                             if (digState < Math.floor(portionDigged * 10)) {
                                 if (portionDigged >= 1 && digState > 0) {
-                                    System.out.println("Cancelling normal. Digged:" + portionDigged + " State:" + digState);
                                     cancel();
                                 } else {
                                     digState = (int) Math.floor(portionDigged * 10);
@@ -118,7 +116,6 @@ public class DigBlock implements Listener {
                             addPlayerToDigDelay(player);
 
                             if (blockReader.playerIsDiggingBlock()) {
-                                System.out.println("Player is digging block " + this.getTaskId());
                                 breakBlock(player, usedItem, block);
                             }
 
@@ -208,8 +205,6 @@ public class DigBlock implements Listener {
 
             seconds = hardness * 1.5f;
         }
-
-        System.out.println("Hardness: " + hardness + " Block: " + blockToBreak.getType());
 
         float speedMultiplier = 1;
 
