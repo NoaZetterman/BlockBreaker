@@ -6,9 +6,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Handles getting data from the configuration file config.yml
@@ -19,6 +17,9 @@ public class ConfigHelper {
 
     private final String isHarvestableKey = "isHarvestable";
     private final String isBestToolKey = "isBestTool";
+    private final String minEnchantmentKey = "MinEnchantment";
+    private final String exactEnchantmentKey = "ExactEnchantment";
+    private final String diggableBlocksKey = "DiggableBlocks";
 
     private final String itemsToDigWithKey = "itemsToDigWith";
     private final String blocksToDigKey = "blocksToDig";
@@ -34,16 +35,23 @@ public class ConfigHelper {
     }
 
     private void setUpItems(FileConfiguration fileConfiguration) {
+        //new EnchantmentWrapper("fortune")
         ConfigurationSection configurationSection = fileConfiguration.getConfigurationSection(itemsToDigWithKey);
 
         Set<String> itemsAsMap = configurationSection.getKeys(false);
         items = new HashMap<>(itemsAsMap.size());
 
-        for(String materialName : itemsAsMap) {
-            ConfigurationSection itemConfiguration = configurationSection.getConfigurationSection(materialName);;
+        for(String itemName : itemsAsMap) {
+            ConfigurationSection itemConfiguration = configurationSection.getConfigurationSection(itemName);;
 
             boolean isHarvestable = true;
             boolean isBestTool = true;
+
+            Set<Material> breakableMaterials = new HashSet<>();
+
+            Map<String, Integer> minEnchantmentMap = new HashMap<>();
+            Map<String, Integer> exactEnchantmentMap = new HashMap<>();
+
 
             if(itemConfiguration.contains(isHarvestableKey)) {
                 isHarvestable = itemConfiguration.getBoolean(isHarvestableKey);
@@ -53,7 +61,35 @@ public class ConfigHelper {
                 isBestTool = itemConfiguration.getBoolean(isBestToolKey);
             }
 
-            items.put(Material.getMaterial(materialName), new ItemDigConfiguration(isHarvestable, isBestTool));
+            if(itemConfiguration.contains(diggableBlocksKey)) {
+                List<String> materialNames = itemConfiguration.getStringList(diggableBlocksKey);
+
+                for(String materialName : materialNames) {
+                    breakableMaterials.add(Material.getMaterial(materialName));
+                }
+            }
+
+
+            if(itemConfiguration.contains(minEnchantmentKey)) {
+                ConfigurationSection minEnchantmentSection = itemConfiguration.getConfigurationSection(minEnchantmentKey);
+                Set<String> enchantmentsWithChild = minEnchantmentSection.getKeys(false);
+
+                for(String name : enchantmentsWithChild) {
+                    minEnchantmentMap.put(name, minEnchantmentSection.getInt(name));
+                }
+            }
+
+            if(itemConfiguration.contains(exactEnchantmentKey)) {
+                ConfigurationSection exactEnchantmentSection = itemConfiguration.getConfigurationSection(exactEnchantmentKey);
+                Set<String> enchantmentsWithChild = exactEnchantmentSection.getKeys(false);
+
+                for(String name : enchantmentsWithChild) {
+                    //TODO: Retrieve a int list instead of just an int
+                    exactEnchantmentMap.put(name, exactEnchantmentSection.getInt(name));
+                }
+            }
+
+            items.put(Material.getMaterial(itemName), new ItemDigConfiguration(isHarvestable, isBestTool, breakableMaterials, exactEnchantmentMap, minEnchantmentMap));
         }
     }
 
@@ -101,5 +137,15 @@ public class ConfigHelper {
 
     public float getCustomHardness(Block block) {
         return blocks.get(block.getType());
+    }
+
+    //ENCHANTS
+
+    public boolean canBreakBlock(ItemStack item, Block blockToDig) {
+        if(items.containsKey(item.getType()) && blocks.containsKey(blockToDig.getType())) {
+            return items.get(item.getType()).canBreakBlock(item.getEnchantments(), blockToDig.getType());
+        } else {
+            return false;
+        }
     }
 }

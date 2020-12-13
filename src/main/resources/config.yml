@@ -6,11 +6,11 @@ itemsToDigWith:
   DIAMOND_PICKAXE: # Must be caps and exact same as item is named in game
     isHarvestable: true
     isBestTool: true
-    #MinEnchantment: # Min Enchantment has higher prio than Exact enchantment
-    #  Fireaspecc: 1,
-    #  fatigue: 23
-    #ExactEnchantment:
-    #  quiccdig: [3,1]
+    MinEnchantment: # If any of the below are true >= given lvl then its ok to break
+      sharpness: 1,
+      fatigue: 23
+    ExactEnchantment: # All below must be true, however if any MinEnchantment is true then this is redundant
+      unbreaking: [3,1]
     #PERMISSION:
     #  normal player or smth - Links to toggle.bb or whatever that is
 

@@ -40,11 +40,14 @@ public class DigBlock implements Listener {
     @EventHandler
     public void onPlayerStartDigBlock(BlockDamageEvent event) {
         //Check if block and item exists in configuration
-        if(configHelper.toolExists(event.getItemInHand()) && configHelper.blockExists(event.getBlock())) {
+        if(configHelper.canBreakBlock(event.getItemInHand(), event.getBlock())) {
+            System.out.println("Block: " + event.getBlock());
 
             new BukkitRunnable() {
                 private float portionDigged = 0;
                 private int digState = 0;
+
+                private boolean isinstabreak = false;
 
                 private final Player player = event.getPlayer();
                 private final Block block = event.getBlock();
@@ -57,6 +60,9 @@ public class DigBlock implements Listener {
                 public void run() {
                     if(blockReader == null) {
                         if(getTotalDigTimeInTicks(player, usedItem, block) == 0) {
+                            isinstabreak = true;
+                            portionDigged = 1;
+
                             cancel();
                         } else {
                             //Use the runnables taskid to initialize a new PacketInjector, it should then be completely unique.
@@ -64,6 +70,7 @@ public class DigBlock implements Listener {
                         }
                     } else if(!playersWithDigDelay.contains(player.getUniqueId())) {
                         if (!blockReader.playerIsDiggingBlock()) {
+                            System.out.println("Player is not digging block " + this.getTaskId());
                             cancel();
                         } else {
 
@@ -77,6 +84,7 @@ public class DigBlock implements Listener {
                             //There are a total of 10 different dig states (0-9)
                             if (digState < Math.floor(portionDigged * 10)) {
                                 if (portionDigged >= 1 && digState > 0) {
+                                    System.out.println("Cancelling normal. Digged:" + portionDigged + " State:" + digState);
                                     cancel();
                                 } else {
                                     digState = (int) Math.floor(portionDigged * 10);
@@ -105,40 +113,25 @@ public class DigBlock implements Listener {
                     updateBlockBreakAnimation();
 
                     //If percentDigged is 0 then it is insta break
-                    if(portionDigged != 0) {
-                        addPlayerToDigDelay(player);
+                    if(portionDigged >= 1 && block.getType() != Material.AIR) {
+                        if (!isinstabreak) {
+                            addPlayerToDigDelay(player);
 
-                        if(blockReader.playerIsDiggingBlock() && block.getType() != Material.AIR) {
+                            if (blockReader.playerIsDiggingBlock()) {
+                                System.out.println("Player is digging block " + this.getTaskId());
+                                breakBlock(player, usedItem, block);
+                            }
+
+                            PacketInjector.removePlayer(player, String.valueOf(this.getTaskId()));
+                        } else {
                             breakBlock(player, usedItem, block);
                         }
-
-                        PacketInjector.removePlayer(player, String.valueOf(this.getTaskId()));
-                    } else  {
-                        breakBlock(player, usedItem, block);
                     }
 
                     super.cancel();
                 }
             }.runTaskTimer(bedrockBreaker, 0, 1);
         }
-    }
-
-    /**
-     * Adds a player to have a dig delay of 5 ticks (0.25s), this makes
-     * the player unable to actively dig another block (the block animation does not change)
-     *
-     * @param player The player to add a dig delay to
-     */
-    private void addPlayerToDigDelay(Player player) {
-        playersWithDigDelay.add(player.getUniqueId());
-
-        new BukkitRunnable() {
-
-            @Override
-            public void run() {
-                playersWithDigDelay.remove(player.getUniqueId());
-            }
-        }.runTaskLaterAsynchronously(bedrockBreaker, 5);
     }
 
     /**
@@ -174,6 +167,24 @@ public class DigBlock implements Listener {
     }
 
     /**
+     * Adds a player to have a dig delay of 5 ticks (0.25s), this makes
+     * the player unable to actively dig another block (the block animation does not change)
+     *
+     * @param player The player to add a dig delay to
+     */
+    private void addPlayerToDigDelay(Player player) {
+        playersWithDigDelay.add(player.getUniqueId());
+
+        new BukkitRunnable() {
+
+            @Override
+            public void run() {
+                playersWithDigDelay.remove(player.getUniqueId());
+            }
+        }.runTaskLaterAsynchronously(bedrockBreaker, 5);
+    }
+
+    /**
      * Calculates how long it takes to dig a block with a given item, for a player which may have
      * effects active
      *
@@ -197,6 +208,8 @@ public class DigBlock implements Listener {
 
             seconds = hardness * 1.5f;
         }
+
+        System.out.println("Hardness: " + hardness + " Block: " + blockToBreak.getType());
 
         float speedMultiplier = 1;
 
