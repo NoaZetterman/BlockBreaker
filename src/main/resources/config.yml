@@ -1,19 +1,21 @@
 blocksToDig:
   BEDROCK:
-    hardness: 1.5
+    hardness: 1.5 # Hardness is how a base measure for how long it takes to break a block
+      # Hardness 1.5 is same as Stone. See https://minecraft.gamepedia.com/Module:Hardness_values for full list of values
+  #Other blocks may be added
 
 itemsToDigWith:
   DIAMOND_PICKAXE: # Must be caps and exact same as item is named in game
+    isHarvestable: true # isHarvestable (true - The digged block will give a drop when it breaks) True if not set
+    isBestTool: true # isBestTool (true - It will dig the block faster, ie dirt is mined faster by shovel than pick) True if not set
+    AnyEnchantment: # Player must have atleast one of the enchantments at the defined level or higher
+      unbreaking: 2 # Name of enchantment and min level to break custom blocks
+      efficiency: 3
+    AllEnchantment: # Player must have ALL the enchantments given below at the defined level or higher
+      sharpness: 1
+    DiggableBlocks: [ # The customised blocks this item can break, if not set then it is all
+      BEDROCK
+      ]
+  WOODEN_PICKAXE:
     isHarvestable: true
     isBestTool: true
-    MinEnchantment: # If any of the below are true >= given lvl then its ok to break
-      sharpness: 1,
-      fatigue: 23
-    ExactEnchantment: # All below must be true, however if any MinEnchantment is true then this is redundant
-      unbreaking: [3,1]
-    #PERMISSION:
-    #  normal player or smth - Links to toggle.bb or whatever that is
-
-# Also add:
-# isHarvestable (true - The digged block will give a drop when it breaks) (True if not set)
-# isBestTool (true - It will dig the block faster, ie dirt is mined faster by shovel than pick) (true if not set

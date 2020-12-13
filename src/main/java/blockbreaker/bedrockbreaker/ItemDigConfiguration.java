@@ -13,15 +13,15 @@ public class ItemDigConfiguration {
 
     private final Set<Material> breakableMaterials;
 
-    private final Map<String, Integer> exactEnchantments;
-    private final Map<String, Integer> minEnchantments;
+    private final Map<String, Integer> needAllEnchantments;
+    private final Map<String, Integer> needAnyEnchantments;
 
     public ItemDigConfiguration(boolean isHarvestable, boolean isBestTool, Set<Material> breakableMaterials, Map<String, Integer> exactEnchantments, Map<String, Integer> minEnchantments) {
         this.isHarvestable = isHarvestable;
         this.isBestTool = isBestTool;
         this.breakableMaterials = breakableMaterials;
-        this.exactEnchantments = exactEnchantments;
-        this.minEnchantments = minEnchantments;
+        this.needAllEnchantments = exactEnchantments;
+        this.needAnyEnchantments = minEnchantments;
     }
 
     public boolean isHarvestable() {
@@ -40,21 +40,21 @@ public class ItemDigConfiguration {
      */
     public boolean canBreakBlock(Map<Enchantment, Integer> activeEnchantments, Material blockMaterial) {
         if(breakableMaterials.contains(blockMaterial) || breakableMaterials.size() == 0) {
-            return hasExactEnchantments(activeEnchantments) && hasMinEnchantment(activeEnchantments);
+            return hasAllEnchantments(activeEnchantments) && hasAnyEnchantment(activeEnchantments);
         } else {
             return false;
         }
     }
 
-    private boolean hasMinEnchantment(Map<Enchantment, Integer> activeEnchantments) {
-        if(minEnchantments.size() == 0) {
+    private boolean hasAnyEnchantment(Map<Enchantment, Integer> activeEnchantments) {
+        if(needAnyEnchantments.size() == 0) {
             return true;
         }
 
         for(Enchantment enchantment : activeEnchantments.keySet()) {
             String key = enchantment.getKey().getKey();
-            if(minEnchantments.containsKey(key)
-                    && minEnchantments.get(key).compareTo(activeEnchantments.get(enchantment)) <= 0) {
+            if(needAnyEnchantments.containsKey(key)
+                    && needAnyEnchantments.get(key).compareTo(activeEnchantments.get(enchantment)) <= 0) {
                 return true;
             }
         }
@@ -62,12 +62,12 @@ public class ItemDigConfiguration {
         return false;
     }
 
-    private boolean hasExactEnchantments(Map<Enchantment, Integer> activeEnchantments) {
+    private boolean hasAllEnchantments(Map<Enchantment, Integer> activeEnchantments) {
 
-        for(String enchantmentName : exactEnchantments.keySet()) {
+        for(String enchantmentName : needAllEnchantments.keySet()) {
             if(!activeEnchantments.containsKey(Enchantment.getByKey(NamespacedKey.minecraft(enchantmentName)))
-                    || exactEnchantments.get(enchantmentName)
-                    .compareTo(activeEnchantments.get(Enchantment.getByKey(NamespacedKey.minecraft(enchantmentName)))) != 0) {
+                    || needAllEnchantments.get(enchantmentName)
+                    .compareTo(activeEnchantments.get(Enchantment.getByKey(NamespacedKey.minecraft(enchantmentName)))) > 0) {
                 return false;
             }
         }

@@ -41,7 +41,6 @@ public class DigBlock implements Listener {
     public void onPlayerStartDigBlock(BlockDamageEvent event) {
         //Check if block and item exists in configuration
         if(configHelper.canBreakBlock(event.getItemInHand(), event.getBlock())) {
-            System.out.println("Block: " + event.getBlock());
 
             new BukkitRunnable() {
                 private float portionDigged = 0;

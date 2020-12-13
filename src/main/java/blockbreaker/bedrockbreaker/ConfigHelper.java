@@ -9,7 +9,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.*;
 
 /**
- * Handles getting data from the configuration file config.yml
+ * Handles getting data configured in config.yml
  */
 public class ConfigHelper {
 
@@ -17,15 +17,13 @@ public class ConfigHelper {
 
     private final String isHarvestableKey = "isHarvestable";
     private final String isBestToolKey = "isBestTool";
-    private final String minEnchantmentKey = "MinEnchantment";
-    private final String exactEnchantmentKey = "ExactEnchantment";
+    private final String anyEnchantmentKey = "AnyEnchantment";
+    private final String allEnchantmentKey = "AllEnchantment";
     private final String diggableBlocksKey = "DiggableBlocks";
 
     private final String itemsToDigWithKey = "itemsToDigWith";
     private final String blocksToDigKey = "blocksToDig";
 
-
-    //private final FileConfiguration fileConfiguration;
     private HashMap<Material, ItemDigConfiguration> items;
     private HashMap<Material, Float> blocks;
 
@@ -35,7 +33,6 @@ public class ConfigHelper {
     }
 
     private void setUpItems(FileConfiguration fileConfiguration) {
-        //new EnchantmentWrapper("fortune")
         ConfigurationSection configurationSection = fileConfiguration.getConfigurationSection(itemsToDigWithKey);
 
         Set<String> itemsAsMap = configurationSection.getKeys(false);
@@ -70,22 +67,21 @@ public class ConfigHelper {
             }
 
 
-            if(itemConfiguration.contains(minEnchantmentKey)) {
-                ConfigurationSection minEnchantmentSection = itemConfiguration.getConfigurationSection(minEnchantmentKey);
-                Set<String> enchantmentsWithChild = minEnchantmentSection.getKeys(false);
+            if(itemConfiguration.contains(anyEnchantmentKey)) {
+                ConfigurationSection anyEnchantmentSection = itemConfiguration.getConfigurationSection(anyEnchantmentKey);
+                Set<String> enchantmentsWithChild = anyEnchantmentSection.getKeys(false);
 
                 for(String name : enchantmentsWithChild) {
-                    minEnchantmentMap.put(name, minEnchantmentSection.getInt(name));
+                    minEnchantmentMap.put(name, anyEnchantmentSection.getInt(name));
                 }
             }
 
-            if(itemConfiguration.contains(exactEnchantmentKey)) {
-                ConfigurationSection exactEnchantmentSection = itemConfiguration.getConfigurationSection(exactEnchantmentKey);
-                Set<String> enchantmentsWithChild = exactEnchantmentSection.getKeys(false);
+            if(itemConfiguration.contains(allEnchantmentKey)) {
+                ConfigurationSection allEnchantmentSection = itemConfiguration.getConfigurationSection(allEnchantmentKey);
+                Set<String> enchantmentsWithChild = allEnchantmentSection.getKeys(false);
 
                 for(String name : enchantmentsWithChild) {
-                    //TODO: Retrieve a int list instead of just an int
-                    exactEnchantmentMap.put(name, exactEnchantmentSection.getInt(name));
+                    exactEnchantmentMap.put(name, allEnchantmentSection.getInt(name));
                 }
             }
 
@@ -113,10 +109,6 @@ public class ConfigHelper {
 
     //ITEMS
 
-    public boolean toolExists(ItemStack itemStack) {
-        return items.containsKey(itemStack.getType());
-    }
-
     public boolean isHarvestable(ItemStack itemStack) {
         return items.get(itemStack.getType()).isHarvestable();
     }
@@ -126,10 +118,6 @@ public class ConfigHelper {
     }
 
     //BLOCKS
-
-    public boolean blockExists(Block block) {
-        return blocks.containsKey(block.getType());
-    }
 
     public boolean hasCustomHardness(Block block) {
         return blocks.get(block.getType()) != null;
