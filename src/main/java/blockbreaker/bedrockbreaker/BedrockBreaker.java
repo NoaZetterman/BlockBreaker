@@ -11,8 +11,8 @@ public final class BedrockBreaker extends JavaPlugin {
     @Override
     public void onEnable() {
         this.saveDefaultConfig();
-        
-        getServer().getPluginManager().registerEvents(new BlockEvents(this), this);
+
+        getServer().getPluginManager().registerEvents(new DigBlock(this), this);
 
     }
 

@@ -19,15 +19,18 @@ import org.bukkit.scheduler.BukkitRunnable;
 import java.util.HashSet;
 import java.util.UUID;
 
-
-public class BlockEvents implements Listener {
+/**
+ * Handles digging with customizable items on customized blocks.
+ *
+ */
+public class DigBlock implements Listener {
 
     private final BedrockBreaker bedrockBreaker;
     private final ConfigHelper configHelper;
 
     private HashSet<UUID> playersWithDigDelay = new HashSet<>();
 
-    public BlockEvents(BedrockBreaker bedrockBreaker) {
+    public DigBlock(BedrockBreaker bedrockBreaker) {
         this.bedrockBreaker = bedrockBreaker;
 
         configHelper = new ConfigHelper(bedrockBreaker.getConfig());
@@ -36,11 +39,13 @@ public class BlockEvents implements Listener {
     //Triggers when the player starts to dig a block
     @EventHandler
     public void onPlayerStartDigBlock(BlockDamageEvent event) {
+        //Check if block and item exists in configuration
         if(configHelper.toolExists(event.getItemInHand()) && configHelper.blockExists(event.getBlock())) {
 
             new BukkitRunnable() {
-                private float percentDigged = 0;
+                private float portionDigged = 0;
                 private int digState = 0;
+
                 private final Player player = event.getPlayer();
                 private final Block block = event.getBlock();
                 private final BlockPosition blockPosition = new BlockPosition(block.getX(),block.getY(),block.getZ());
@@ -50,24 +55,31 @@ public class BlockEvents implements Listener {
 
                 @Override
                 public void run() {
-                    //Check if block was just broken by player and if so then add delay?
                     if(blockReader == null) {
-                        //Use the runnables taskid to initialize a new PacketInjector, it should then be completely unique.
-                        blockReader = PacketInjector.addPlayer(event.getPlayer(), String.valueOf(this.getTaskId()));
+                        if(getTotalDigTimeInTicks(player, usedItem, block) == 0) {
+                            cancel();
+                        } else {
+                            //Use the runnables taskid to initialize a new PacketInjector, it should then be completely unique.
+                            blockReader = PacketInjector.addPlayer(event.getPlayer(), String.valueOf(this.getTaskId()));
+                        }
                     } else if(!playersWithDigDelay.contains(player.getUniqueId())) {
                         if (!blockReader.playerIsDiggingBlock()) {
                             cancel();
                         } else {
 
                             float ticksToBreak = getTotalDigTimeInTicks(player, usedItem, block);
-                            percentDigged += 1 / ticksToBreak;
+                            if(ticksToBreak == 0) {
+                                portionDigged = 1;
+                            } else {
+                                portionDigged += 1 / ticksToBreak;
+                            }
 
-                            //There are a total of 10 different dig states
-                            if (digState < Math.floor(percentDigged * 10)) {
-                                if (percentDigged >= 1 && digState > 0) {
+                            //There are a total of 10 different dig states (0-9)
+                            if (digState < Math.floor(portionDigged * 10)) {
+                                if (portionDigged >= 1 && digState > 0) {
                                     cancel();
                                 } else {
-                                    digState = (int) Math.floor(percentDigged * 10);
+                                    digState = (int) Math.floor(portionDigged * 10);
                                     updateBlockBreakAnimation();
                                 }
                             }
@@ -92,42 +104,31 @@ public class BlockEvents implements Listener {
                     digState = -1; //Any number not 0-9 sets the block to not show a dig animation
                     updateBlockBreakAnimation();
 
-                    addPlayerToDigDelay(player);
+                    //If percentDigged is 0 then it is insta break
+                    if(portionDigged != 0) {
+                        addPlayerToDigDelay(player);
 
-
-                    if(blockReader.playerIsDiggingBlock() && block.getType() != Material.AIR) {
-                        Material blockType = block.getType();
-
-                        //If the block does not drop anything, then do a custom drop
-                        if(block.getDrops(usedItem).size() == 0) {
-                            block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(blockType,1));
-                        };
-
-                        block.breakNaturally(usedItem, true);
-
-                        if(itemIsBreakableByDigging(usedItem) && usedItem.getItemMeta() instanceof Damageable) {
-                            Damageable itemMeta = (Damageable) usedItem.getItemMeta();
-                            int itemDamage = itemMeta.getDamage();
-                            float durabilityEnchantmentLevel = usedItem.getEnchantmentLevel(Enchantment.DURABILITY);
-
-                            //Calculate durability change
-                            int durabilityChange = Math.random()*100 < (100/(durabilityEnchantmentLevel+1)) ? 1 : 0;
-                            itemMeta.setDamage(itemDamage + durabilityChange);
-                            if(itemMeta.getDamage() >= usedItem.getType().getMaxDurability()) {
-                                player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-                            } else {
-                                usedItem.setItemMeta((ItemMeta) itemMeta);
-                            }
+                        if(blockReader.playerIsDiggingBlock() && block.getType() != Material.AIR) {
+                            breakBlock(player, usedItem, block);
                         }
+
+                        PacketInjector.removePlayer(player, String.valueOf(this.getTaskId()));
+                    } else  {
+                        breakBlock(player, usedItem, block);
                     }
 
-                    PacketInjector.removePlayer(player, String.valueOf(this.getTaskId()));
                     super.cancel();
                 }
             }.runTaskTimer(bedrockBreaker, 0, 1);
         }
     }
 
+    /**
+     * Adds a player to have a dig delay of 5 ticks (0.25s), this makes
+     * the player unable to actively dig another block (the block animation does not change)
+     *
+     * @param player The player to add a dig delay to
+     */
     private void addPlayerToDigDelay(Player player) {
         playersWithDigDelay.add(player.getUniqueId());
 
@@ -141,6 +142,41 @@ public class BlockEvents implements Listener {
     }
 
     /**
+     * Breaks a block using an item. Sets drop and durability of item if needed.
+     *
+     * @param player The player that's breaking the block
+     * @param usedItem The item used to break the block
+     * @param block The block to break
+     */
+    private void breakBlock(Player player, ItemStack usedItem, Block block) {
+        Material blockType = block.getType();
+
+        if (block.getDrops(usedItem).size() == 0) {
+            block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(blockType, 1));
+        }
+
+        block.breakNaturally(usedItem, true);
+
+        if (itemIsBreakableByDigging(usedItem) && usedItem.getItemMeta() instanceof Damageable) {
+            Damageable itemMeta = (Damageable) usedItem.getItemMeta();
+            int itemDamage = itemMeta.getDamage();
+            float durabilityEnchantmentLevel = usedItem.getEnchantmentLevel(Enchantment.DURABILITY);
+
+            //Calculate durability change
+            int durabilityChange = Math.random() * 100 < (100 / (durabilityEnchantmentLevel + 1)) ? 1 : 0;
+            itemMeta.setDamage(itemDamage + durabilityChange);
+            if (itemMeta.getDamage() >= usedItem.getType().getMaxDurability()) {
+                player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+            } else {
+                usedItem.setItemMeta((ItemMeta) itemMeta);
+            }
+        }
+    }
+
+    /**
+     * Calculates how long it takes to dig a block with a given item, for a player which may have
+     * effects active
+     *
      * See https://minecraft.gamepedia.com/Breaking#Calculation for algorithm used
      *
      * @param player The player that is breaking the block
@@ -152,13 +188,14 @@ public class BlockEvents implements Listener {
         boolean isHarvestable = configHelper.isHarvestable(itemUsedToBreak);
 
         float seconds = 5;
+        float hardness = blockToBreak.getType().getHardness();
 
         if(isHarvestable) {
             if (configHelper.hasCustomHardness(blockToBreak)) {
-                seconds = configHelper.getCustomHardness(blockToBreak) * 1.5f;
-            } else {
-                seconds = blockToBreak.getType().getHardness() * 1.5f;
+                hardness = configHelper.getCustomHardness(blockToBreak);
             }
+
+            seconds = hardness * 1.5f;
         }
 
         float speedMultiplier = 1;
@@ -168,10 +205,10 @@ public class BlockEvents implements Listener {
 
             //Check if player has efficiency
             if (itemUsedToBreak.getEnchantments().containsKey(Enchantment.DIG_SPEED)) {
-                speedMultiplier += Math.pow(itemUsedToBreak.getEnchantments().get(Enchantment.DIG_SPEED)+1, 2) + 1;
+                speedMultiplier += Math.pow(itemUsedToBreak.getEnchantments().get(Enchantment.DIG_SPEED), 2) + 1;
             }
 
-            //Reset multiplayer if item is not harvestable.
+            //Reset multiplier if item is not harvestable.
             if(!isHarvestable) {
                 speedMultiplier = 1;
             }
@@ -179,12 +216,12 @@ public class BlockEvents implements Listener {
 
         //Check if player has haste
         if(player.hasPotionEffect(PotionEffectType.FAST_DIGGING)) {
-            speedMultiplier *= 1 + 0.2*player.getPotionEffect(PotionEffectType.FAST_DIGGING).getAmplifier();
+            speedMultiplier *= 1 + 0.2 * (player.getPotionEffect(PotionEffectType.FAST_DIGGING).getAmplifier() + 1);
         }
 
         //Check if player has mining fatigue
         if(player.hasPotionEffect(PotionEffectType.SLOW_DIGGING)) {
-            speedMultiplier /= Math.pow(3,player.getPotionEffect(PotionEffectType.SLOW_DIGGING).getAmplifier());
+            speedMultiplier /= Math.pow(3, player.getPotionEffect(PotionEffectType.SLOW_DIGGING).getAmplifier() + 1);
         }
 
         seconds /= speedMultiplier;
@@ -203,6 +240,11 @@ public class BlockEvents implements Listener {
             seconds *= 5;
         }
 
+        //Check if the block should be instabreaked
+        if(speedMultiplier > hardness*30) {
+            seconds = 0;
+        }
+
         return seconds*20;
     }
 
@@ -210,6 +252,7 @@ public class BlockEvents implements Listener {
      * Speed multipliers are as defined on https://minecraft.gamepedia.com/Breaking#Speed
      * All tools except hoes are affected. The values are as follows
      * 1(not a tool), 2(wood), 4(stone), 6(iron), 8(dia), 9(nether), 12(gold)
+     *
      * @param item The item to get a speed multiplier of
      * @return A speed multiplier of a value mentioned above
      */
@@ -253,6 +296,8 @@ public class BlockEvents implements Listener {
     }
 
     /**
+     * Checks if an item is breakable by digging
+     *
      * @param itemStack The itemstack to check
      * @return True if durability can be changed when breaking a block, false otherwise
      */
