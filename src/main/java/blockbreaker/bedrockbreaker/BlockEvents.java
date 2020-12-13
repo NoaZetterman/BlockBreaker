@@ -16,11 +16,16 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.util.HashSet;
+import java.util.UUID;
+
 
 public class BlockEvents implements Listener {
 
     private final BedrockBreaker bedrockBreaker;
     private final ConfigHelper configHelper;
+
+    private HashSet<UUID> playersWithDigDelay = new HashSet<>();
 
     public BlockEvents(BedrockBreaker bedrockBreaker) {
         this.bedrockBreaker = bedrockBreaker;
@@ -30,10 +35,8 @@ public class BlockEvents implements Listener {
 
     //Triggers when the player starts to dig a block
     @EventHandler
-    public void onPlayerStartDigBedrock(BlockDamageEvent event) {
+    public void onPlayerStartDigBlock(BlockDamageEvent event) {
         if(configHelper.toolExists(event.getItemInHand()) && configHelper.blockExists(event.getBlock())) {
-            //Check if insta break
-            //TODO: ADD 1/4s delay between breaking blocks unless insta break I guess
 
             new BukkitRunnable() {
                 private float percentDigged = 0;
@@ -42,31 +45,31 @@ public class BlockEvents implements Listener {
                 private final Block block = event.getBlock();
                 private final BlockPosition blockPosition = new BlockPosition(block.getX(),block.getY(),block.getZ());
                 private final ItemStack usedItem = event.getItemInHand();
-                private long time;
 
                 private PacketDigBlockReader blockReader = null;
 
                 @Override
                 public void run() {
+                    //Check if block was just broken by player and if so then add delay?
                     if(blockReader == null) {
-                        time = System.nanoTime();
-
                         //Use the runnables taskid to initialize a new PacketInjector, it should then be completely unique.
                         blockReader = PacketInjector.addPlayer(event.getPlayer(), String.valueOf(this.getTaskId()));
-                    } else if(!blockReader.playerIsDiggingBlock()) {
-                        cancel();
-                    } else {
+                    } else if(!playersWithDigDelay.contains(player.getUniqueId())) {
+                        if (!blockReader.playerIsDiggingBlock()) {
+                            cancel();
+                        } else {
 
-                        float ticksToBreak = getTotalDigTimeInTicks(player, usedItem, block);
-                        percentDigged += 1 / ticksToBreak;
+                            float ticksToBreak = getTotalDigTimeInTicks(player, usedItem, block);
+                            percentDigged += 1 / ticksToBreak;
 
-                        //Animations are always cut into 9 parts, therefore digState/9
-                        if (percentDigged * 10 >= digState) {
-                            digState = (int) Math.floor(percentDigged * 10); //Changed to floor
-                            if (percentDigged >= 1) {
-                                cancel();
-                            } else {
-                                updateBlockBreakState();
+                            //There are a total of 10 different dig states
+                            if (digState < Math.floor(percentDigged * 10)) {
+                                if (percentDigged >= 1 && digState > 0) {
+                                    cancel();
+                                } else {
+                                    digState = (int) Math.floor(percentDigged * 10);
+                                    updateBlockBreakAnimation();
+                                }
                             }
                         }
                     }
@@ -76,7 +79,7 @@ public class BlockEvents implements Listener {
                  * Updates the block breaking animation for players in the same world
                  * as the block
                  */
-                private void updateBlockBreakState() {
+                private void updateBlockBreakAnimation() {
                     PacketPlayOutBlockBreakAnimation action = new PacketPlayOutBlockBreakAnimation(0, blockPosition, digState);
                     for(Player onlinePlayer : block.getWorld().getPlayers()) {
                         ((CraftPlayer)onlinePlayer).getHandle().playerConnection.sendPacket(action);
@@ -86,14 +89,20 @@ public class BlockEvents implements Listener {
 
                 @Override
                 public synchronized void cancel() throws IllegalStateException {
-                    digState = -1; //Or wth is it?
-                    updateBlockBreakState();
+                    digState = -1; //Any number not 0-9 sets the block to not show a dig animation
+                    updateBlockBreakAnimation();
 
-                    if(blockReader.playerIsDiggingBlock()) {
-                        //Remove block and drop it
+                    addPlayerToDigDelay(player);
+
+
+                    if(blockReader.playerIsDiggingBlock() && block.getType() != Material.AIR) {
                         Material blockType = block.getType();
 
-                        //Break naturally is weird with items that can already break
+                        //If the block does not drop anything, then do a custom drop
+                        if(block.getDrops(usedItem).size() == 0) {
+                            block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(blockType,1));
+                        };
+
                         block.breakNaturally(usedItem, true);
 
                         if(itemIsBreakableByDigging(usedItem) && usedItem.getItemMeta() instanceof Damageable) {
@@ -104,22 +113,31 @@ public class BlockEvents implements Listener {
                             //Calculate durability change
                             int durabilityChange = Math.random()*100 < (100/(durabilityEnchantmentLevel+1)) ? 1 : 0;
                             itemMeta.setDamage(itemDamage + durabilityChange);
-
-                            usedItem.setItemMeta((ItemMeta) itemMeta);
+                            if(itemMeta.getDamage() >= usedItem.getType().getMaxDurability()) {
+                                player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
+                            } else {
+                                usedItem.setItemMeta((ItemMeta) itemMeta);
+                            }
                         }
-                        block.getWorld().dropItemNaturally(block.getLocation(), new ItemStack(blockType,1));
-
                     }
 
                     PacketInjector.removePlayer(player, String.valueOf(this.getTaskId()));
-                    long endTime = System.nanoTime() - time;
-                    System.out.println("Start:   " + time + " " + event.getBlock().getX());
-                    System.out.println("End:   " + System.nanoTime() + " " + event.getBlock().getX());
-                    System.out.println("Time diff: " + endTime + " " + event.getBlock().getX());
                     super.cancel();
                 }
             }.runTaskTimer(bedrockBreaker, 0, 1);
         }
+    }
+
+    private void addPlayerToDigDelay(Player player) {
+        playersWithDigDelay.add(player.getUniqueId());
+
+        new BukkitRunnable() {
+
+            @Override
+            public void run() {
+                playersWithDigDelay.remove(player.getUniqueId());
+            }
+        }.runTaskLaterAsynchronously(bedrockBreaker, 5);
     }
 
     /**
@@ -130,7 +148,7 @@ public class BlockEvents implements Listener {
      * @param blockToBreak The block to break
      * @return The total ticks it takes to break this block
      */
-    float getTotalDigTimeInTicks(Player player, ItemStack itemUsedToBreak, Block blockToBreak) {
+    private float getTotalDigTimeInTicks(Player player, ItemStack itemUsedToBreak, Block blockToBreak) {
         boolean isHarvestable = configHelper.isHarvestable(itemUsedToBreak);
 
         float seconds = 5;
@@ -195,7 +213,7 @@ public class BlockEvents implements Listener {
      * @param item The item to get a speed multiplier of
      * @return A speed multiplier of a value mentioned above
      */
-    int getSpeedMultiplier(ItemStack item) {
+    private int getSpeedMultiplier(ItemStack item) {
         Material material = item.getType();
 
         switch(material) {
